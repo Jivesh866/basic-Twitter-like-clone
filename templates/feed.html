@@ -26,10 +26,8 @@
                 <p class="card-text">This is an example of what a user's tweet looks like on the timeline!</p>
 
                 <div class="d-flex justify-content-between align-items-center mt-3">
-                    <!-- Like Button Form -->
-                    <form action="/like" method="POST">
-                        <button type="submit" class="btn btn-outline-danger btn-sm">❤️ Like (5)</button>
-                    </form>
+                    <!-- Like Button Form (Placeholder) -->
+                    <button type="button" class="btn btn-outline-danger btn-sm">❤️ Like (5)</button>
                 </div>
 
                 <hr>
@@ -42,7 +40,6 @@
                     </div>
                     <p class="small mb-2">Great post!</p>
 
-                    <!-- Add Comment Form -->
                     <form action="/comment" method="POST" class="input-group input-group-sm mt-2">
                         <input type="text" name="comment" class="form-control" placeholder="Write a comment...">
                         <button class="btn btn-outline-secondary" type="submit">Reply</button>
@@ -58,17 +55,16 @@
                     <p class="card-text">{{ post.content }}</p>
 
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <!-- Like Button Form -->
-                        <form action="/like/{{ post.id }}" method="POST">
-                            <button type="submit" class="btn btn-outline-danger btn-sm">❤️ Like ({{post.likes}})</button>
-                        </form>
+                        <!-- Dynamic Like Button (Converted to type="button" so it triggers JS instead of standard form submit) -->
+                        <button type="button" class="btn btn-outline-danger btn-sm like-btn" data-post-id="{{ post.id }}">
+                            ❤️ Like (<span class="like-count">{{ post.likes }}</span>)
+                        </button>
                     </div>
 
                     <hr>
 
                     <!-- Comments Section -->
                     <div class="comments-section mt-3">
-                        <!-- Container where comments live -->
                         <div class="comments-list">
                             {% set post_comments = comments | selectattr("post_id", "equalto", post.id) | list %}
                             {% if post_comments | length > 0 %}
@@ -105,6 +101,32 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
+        // --- 1. HANDLE LIKES DYNAMICALLY ---
+        document.querySelectorAll(".like-btn").forEach(button => {
+            button.addEventListener("click", function () {
+                const postId = this.getAttribute("data-post-id");
+                const likeCountSpan = this.querySelector(".like-count");
+
+                fetch(`/like/${postId}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the like count number inside the button text instantly
+                        likeCountSpan.textContent = data.new_likes;
+                    } else {
+                        alert("Error liking post. Make sure you are logged in.");
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+            });
+        });
+
+        // --- 2. HANDLE COMMENTS DYNAMICALLY ---
         document.querySelectorAll(".comment-form").forEach(form => {
             form.addEventListener("submit", function (e) {
                 e.preventDefault(); 
@@ -135,7 +157,7 @@
                             <div class="border-bottom pb-2 mb-2">
                                 <div class="d-flex justify-content-between">
                                     <p class="small text-muted mb-1"><strong>@${data.username}</strong></p>
-                                    <small class="text-muted">${data.timestamp}</small>
+                                    <small class="text-muted">just now</small>
                                 </div>
                                 <p class="small mb-0">${data.content}</p>
                             </div>

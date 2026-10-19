@@ -89,11 +89,19 @@ def fyp():
         return render_template("login.html")
 
     
-@app.route("/like",methods=["POST"])
-def like():
-    if "user_id" not in session:
+@app.route("/like/<int:post_id>",methods=["POST"])
+def like(post_id):
+    if "username" not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    return ""
+    
+    post = Post.query.get_or_404(post_id)
+    post.likes += 1
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "new_likes": post.likes
+    })
 
 @app.route("/comment/<int:post_id>",methods=["POST"])
 def comment(post_id):
