@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
 from flask_bcrypt import Bcrypt
@@ -19,7 +19,7 @@ class User(db.Model):
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer,nullable=False)
+    username = db.Column(db.String(20), nullable=False)
     content = db.Column(db.String(200), nullable=False)
     likes = db.Column(db.Integer,default=0)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -29,8 +29,40 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(200), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    user_id = db.Column(db.Integer, nullable=False)
+    username = db.Column(db.String(20), nullable=False)
     post_id = db.Column(db.Integer, nullable=False)
+
+
+@app.template_filter("time_ago")
+def time_ago(utc_dt):
+  if not utc_dt:
+    return ""
+  
+  if utc_dt.tzinfo is None:
+    utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+
+  now = datetime.now(timezone.utc)
+  diff = now - utc_dt
+
+  seconds = int(diff.total_seconds())
+
+  if seconds < 60:
+    return "just now"
+  minutes = seconds // 60
+  if minutes < 60:
+    return f"{minutes}m ago" if minutes == 1 else f"{minutes}m ago"
+  hours = minutes // 60
+  if hours < 24:
+    return f"{hours}h ago"
+  days = hours // 24
+  if days < 30:
+    return f"{days}d ago"
+  months = days // 30
+  if months < 12:
+    return f"{months}mo ago"
+
+  years = days // 365
+  return f"{years}y ago"
 
 @app.route("/", methods=["POST", "GET"])
 def fyp():
@@ -39,7 +71,7 @@ def fyp():
             content = request.form["content"]
             if not content:
                 return "Enter Something to post", 400
-            post = Post(content=content)  # type:ignore 
+            post = Post(content=content,username=session['username'])  # type:ignore 
             try:
                 db.session.add(post)
                 db.session.commit()
@@ -50,19 +82,44 @@ def fyp():
                 return f"ERROR: {e}"
 
         else:
-            posts = Post.query.order_by(Post.timestamp).limit(10).all()
-            return render_template("feed.html", posts=posts)
+            posts = Post.query.order_by(Post.timestamp.desc()).limit(10).all()
+            comments= Comment.query.order_by(Comment.timestamp).all()
+            return render_template("feed.html", posts=posts, comments=comments)
     else:
         return render_template("login.html")
 
     
 @app.route("/like",methods=["POST"])
 def like():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
     return ""
 
-@app.route("/comment",methods=["POST"])
-def comment():
-    return ""
+@app.route("/comment/<int:post_id>",methods=["POST"])
+def comment(post_id):
+    if "username" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    comment_text = request.form.get("comment") or request.json.get("comment")
+
+    if not comment_text:
+        return jsonify({"error": "Comment cannot be empty"}), 400
+
+    new_comment = Comment(
+        content=comment_text, #type:ignore
+        post_id=post_id, #type:ignore
+        username=session["username"], #type:ignore
+    ) 
+    db.session.add(new_comment)
+    db.session.commit()
+    # Return the data needed for the frontend to render it instantly
+    return jsonify({
+        "success": True,
+        "username": session.get("username"),
+        "content": new_comment.content,
+        "timestamp": datetime.now(timezone.utc), 
+    })
+    
 
 @app.route("/login", methods=["POST", "GET"])
 def login():
@@ -111,7 +168,7 @@ def signup():
 @app.route("/logout")
 def logout():
     session.pop('username')
-    return render_template("signup.html")
+    return redirect("/signup")
 
 
 if __name__ == "__main__":

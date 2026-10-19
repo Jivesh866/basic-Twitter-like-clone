@@ -19,7 +19,7 @@
         </div>
 
         <!-- Feed of Posts -->
-        {%if posts | length < 1 %} 
+        {% if posts | length < 1 %} 
         <div class="card shadow-sm mb-3">
             <div class="card-body">
                 <h6 class="card-subtitle text-muted mb-2">@username • 2 hours ago</h6>
@@ -34,9 +34,13 @@
 
                 <hr>
 
-                <!-- Comments Section -->
+                <!-- Comments Section (Placeholder) -->
                 <div class="comments-section mt-3">
-                    <p class="small text-muted mb-1"><strong>@commenter</strong>: Great post!</p>
+                    <div class="d-flex justify-content-between">
+                        <p class="small text-muted mb-1"><strong>@commenter</strong></p>
+                        <small class="text-muted">1 hour ago</small>
+                    </div>
+                    <p class="small mb-2">Great post!</p>
 
                     <!-- Add Comment Form -->
                     <form action="/comment" method="POST" class="input-group input-group-sm mt-2">
@@ -44,41 +48,108 @@
                         <button class="btn btn-outline-secondary" type="submit">Reply</button>
                     </form>
                 </div>
-
             </div>
         </div>
-        {%else%}
-        {% for post in posts %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-body">
-                <h6 class="card-subtitle text-muted mb-2">@ • {{post.timestamp}}</h6>
-                <p class="card-text">{{post.content}}</p>
+        {% else %}
+            {% for post in posts %}
+            <div class="card shadow-sm mb-3" id="post-{{ post.id }}">
+                <div class="card-body">
+                    <h6 class="card-subtitle text-muted mb-2">@{{ post.username }} • {{ post.timestamp | time_ago }}</h6>
+                    <p class="card-text">{{ post.content }}</p>
 
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <!-- Like Button Form -->
-                    <form action="/like/{{post.id}}" method="POST">
-                        <button type="submit" class="btn btn-outline-danger btn-sm">❤️ Like (5)</button>
-                    </form>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <!-- Like Button Form -->
+                        <form action="/like/{{ post.id }}" method="POST">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">❤️ Like ({{post.likes}})</button>
+                        </form>
+                    </div>
+
+                    <hr>
+
+                    <!-- Comments Section -->
+                    <div class="comments-section mt-3">
+                        <!-- Container where comments live -->
+                        <div class="comments-list">
+                            {% set post_comments = comments | selectattr("post_id", "equalto", post.id) | list %}
+                            {% if post_comments | length > 0 %}
+                                {% for c in post_comments %}
+                                <div class="border-bottom pb-2 mb-2">
+                                    <div class="d-flex justify-content-between">
+                                        <p class="small text-muted mb-1"><strong>@{{ c.username }}</strong></p>
+                                        <small class="text-muted">{{ c.timestamp | time_ago }}</small>
+                                    </div>
+                                    <p class="small mb-0">{{ c.content }}</p>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="small text-muted mb-2 no-comments-text">No comments yet. Be the first to reply!</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Add Comment Form -->
+                        <form class="comment-form input-group input-group-sm mt-3" data-post-id="{{ post.id }}">
+                            <input type="text" name="comment" class="form-control comment-input"
+                                placeholder="Write a comment..." required>
+                            <button class="btn btn-outline-secondary" type="submit">Reply</button>
+                        </form>
+                    </div>
+
                 </div>
-
-                <hr>
-
-                <!-- Comments Section -->
-                <div class="comments-section mt-3">
-                    <p class="small text-muted mb-1"><strong>@commenter</strong>: Great post!</p>
-
-                    <!-- Add Comment Form -->
-                    <form action="/comment" method="POST" class="input-group input-group-sm mt-2">
-                        <input type="text" name="comment" class="form-control" placeholder="Write a comment...">
-                        <button class="btn btn-outline-secondary" type="submit">Reply</button>
-                    </form>
-                </div>
-        {% endfor %}
             </div>
-        </div>
+            {% endfor %}
         {% endif %}
-    <!-- End of Post Loop -->
+        <!-- End of Post Loop -->
 
+    </div>
 </div>
-</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".comment-form").forEach(form => {
+            form.addEventListener("submit", function (e) {
+                e.preventDefault(); 
+
+                const postId = this.getAttribute("data-post-id");
+                const inputField = this.querySelector(".comment-input");
+                const commentText = inputField.value;
+
+                fetch(`/comment/${postId}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `comment=${encodeURIComponent(commentText)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const postCard = document.getElementById(`post-${postId}`);
+                        const commentsList = postCard.querySelector(".comments-list");
+                        
+                        const noCommentsMsg = commentsList.querySelector(".no-comments-text");
+                        if (noCommentsMsg) {
+                            noCommentsMsg.remove();
+                        }
+
+                        const newCommentHtml = `
+                            <div class="border-bottom pb-2 mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <p class="small text-muted mb-1"><strong>@${data.username}</strong></p>
+                                    <small class="text-muted">${data.timestamp}</small>
+                                </div>
+                                <p class="small mb-0">${data.content}</p>
+                            </div>
+                        `;
+
+                        commentsList.insertAdjacentHTML("beforeend", newCommentHtml);
+                        inputField.value = "";
+                    } else {
+                        alert("Error posting comment.");
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+            });
+        });
+    });
+</script>
 {% endblock %}
