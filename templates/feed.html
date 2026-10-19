@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Home Feed{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+
+        <!-- Create Post Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <form action="/" method="POST">
+                    <div class="mb-3">
+                        <textarea class="form-control" name="content" rows="3" placeholder="What is happening?!"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary float-end">Post</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Feed of Posts -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-2">@username • 2 hours ago</h6>
+                <p class="card-text">This is an example of what a user's tweet looks like on the timeline!</p>
+                
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <!-- Like Button Form -->
+                    <form action="#" method="POST">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">❤️ Like (5)</button>
+                    </form>
+                </div>
+
+                <hr>
+
+                <!-- Comments Section -->
+                <div class="comments-section mt-3">
+                    <p class="small text-muted mb-1"><strong>@commenter</strong>: Great post!</p>
+                    
+                    <!-- Add Comment Form -->
+                    <form action="#" method="POST" class="input-group input-group-sm mt-2">
+                        <input type="text" name="comment" class="form-control" placeholder="Write a comment...">
+                        <button class="btn btn-outline-secondary" type="submit">Reply</button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+        <!-- End of Post Loop -->
+
+    </div>
+</div>
+{% endblock %}
