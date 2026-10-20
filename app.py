@@ -15,11 +15,12 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), nullable=False,unique=True)
     password_hash = db.Column(db.String(60), nullable=False)
-
+    posts = db.relationship('Post', backref='author', lazy=True)
+    comments = db.relationship('Comment', backref='author', lazy=True)
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), nullable=False)
+    username = db.Column(db.String(20), db.ForeignKey('user.username'), nullable=False)
     content = db.Column(db.String(200), nullable=False)
     likes = db.Column(db.Integer,default=0)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -29,8 +30,8 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(200), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    username = db.Column(db.String(20), nullable=False)
-    post_id = db.Column(db.Integer, nullable=False)
+    username = db.Column(db.String(20), db.ForeignKey('user.username'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
 
 
 @app.template_filter("time_ago")
@@ -82,9 +83,11 @@ def fyp():
                 return f"ERROR: {e}"
 
         else:
-            posts = Post.query.order_by(Post.timestamp.desc()).limit(10).all()
+            page = request.args.get('page', 1, type=int)
+            pagination = Post.query.order_by(Post.timestamp.desc()).paginate(page=page, per_page=10, error_out=False)
+            posts = pagination.items
             comments= Comment.query.order_by(Comment.timestamp).all()
-            return render_template("feed.html", posts=posts, comments=comments)
+            return render_template("feed.html",pagination=pagination, posts=posts, comments=comments)
     else:
         return render_template("login.html")
 
