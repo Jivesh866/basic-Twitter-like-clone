@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}@{{ profile_user.username }}'s Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+
+        <!-- User Profile Header -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-4">
+                <h3>@{{ profile_user.username }}</h3>
+                <p class="text-muted">Total Posts: {{ profile_user.posts | length }}</p>
+            </div>
+        </div>
+
+        <!-- Loop through user.posts directly using the backref -->
+        <h5 class="mb-3">Posts by @{{ profile_user.username }}</h5>
+
+        {% if profile_user.posts %}
+            {% for post in profile_user.posts %}
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body">
+                        <h6 class="card-subtitle text-muted mb-2">
+                            @{{ profile_user.username }} • {{ post.timestamp | time_ago }}
+                        </h6>
+                        <p class="card-text">{{ post.content }}</p>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-secondary text-center">
+                This user hasn't posted anything yet.
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

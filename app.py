@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request, redirect, session, jsonify, flash
+from flask import Flask, render_template
 from datetime import datetime, timezone
-from exntensions import db,bcrypt
+from extensions import db,bcrypt
 app = Flask(__name__)
 app.secret_key="23476234672364hjugfahdsvfhdvhshfk87r23563t2grkvfwej"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"

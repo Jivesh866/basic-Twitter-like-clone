@@ -101,7 +101,6 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        // --- 1. HANDLE LIKES DYNAMICALLY ---
         document.querySelectorAll(".like-btn").forEach(button => {
             button.addEventListener("click", function () {
                 const postId = this.getAttribute("data-post-id");
@@ -116,7 +115,6 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Update the like count number inside the button text instantly
                         likeCountSpan.textContent = data.new_likes;
                     } else {
                         alert("Error liking post. Make sure you are logged in.");
@@ -126,7 +124,7 @@
             });
         });
 
-        // --- 2. HANDLE COMMENTS DYNAMICALLY ---
+        
         document.querySelectorAll(".comment-form").forEach(form => {
             form.addEventListener("submit", function (e) {
                 e.preventDefault(); 
