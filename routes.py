@@ -60,6 +60,7 @@ def globalfyp():
     else:
         return render_template("login.html")
 
+#eyyyy
 
 @main_bp.route("/profile/<username>")
 def profile(username):
