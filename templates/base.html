@@ -18,13 +18,14 @@
 
             <div class="d-flex align-items-center">
                 <a href="/" class="btn btn-outline-light btn-sm me-2">Home</a>
+                <a href="/global" class="btn btn-outline-light btn-sm me-2">Global Feed</a>
 
                 <!-- User Settings Dropdown / Auth Check -->
                 <div class="dropdown">
                     {% if session.get('username') %}
                     <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="userMenuButton"
                         data-bs-toggle="dropdown" aria-expanded="false">
-                        &#9776;
+                        &#9776; @{{session.get('username')}}
                     </button>
                     <!-- Dropdown Menu -->
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuButton">

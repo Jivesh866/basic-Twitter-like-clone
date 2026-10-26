@@ -4,49 +4,71 @@ from extensions import db, bcrypt
 from models import User, Comment, Post
 from sqlalchemy.exc import IntegrityError
 
+"""
+Routes:
+feed->
+    /
+    /global
+user management ->
+    /login  
+    /signup
+    /logout
+    /profile/<username>
+post management ->
+    /like/<post_id>
+    /comment/<post_id>
+
+"""
 main_bp = Blueprint("main", __name__)
 
 
-@main_bp.route("/", methods=["POST", "GET"])
+@main_bp.route("/")
 def fyp():
     if "username" in session:
-        if request.method == "POST":
-            content = request.form["content"]
-            if not content:
-                flash("Post content cannot be empty!", "warning")
-                return redirect("/")
+        current_user = User.query.filter_by(username=session["username"]).first()
 
-            post = Post(content=content, username=session["username"])  # type:ignore
-            try:
-                db.session.add(post)
-                db.session.commit()
-                flash("Post sent!", "success")
-                return redirect("/")
+        followed_usernames = [u.username for u in current_user.followed.all()] #type:ignore
 
-            except Exception as e:
-                print(f"ERROR: {e}")
-                return f"ERROR: {e}"
+        page = request.args.get("page", 1, type=int)
+        pagination = (
+            Post.query.filter(Post.username.in_(followed_usernames))
+            .order_by(Post.timestamp.desc())
+            .paginate(page=page, per_page=10, error_out=False)
+        )
+        posts = pagination.items
+        comments = Comment.query.order_by(Comment.timestamp).all()
+        return render_template(
+            "feed.html", pagination=pagination, posts=posts, comments=comments
+        )
+    else:
+        flash("Please Login To continue", "warning")
+        return redirect("/login")
 
-        else:
-            page = request.args.get("page", 1, type=int)
-            pagination = Post.query.order_by(Post.timestamp.desc()).paginate(
-                page=page, per_page=10, error_out=False
-            )
-            posts = pagination.items
-            comments = Comment.query.order_by(Comment.timestamp).all()
-            return render_template(
-                "feed.html", pagination=pagination, posts=posts, comments=comments
-            )
+
+@main_bp.route("/global")
+def globalfyp():
+    if "username" in session:
+        page = request.args.get("page", 1, type=int)
+        pagination = Post.query.order_by(Post.timestamp.desc()).paginate(
+            page=page, per_page=10, error_out=False
+        )
+        posts = pagination.items
+        comments = Comment.query.order_by(Comment.timestamp).all()
+        return render_template(
+            "feed.html", pagination=pagination, posts=posts, comments=comments
+        )
     else:
         return render_template("login.html")
+
 
 @main_bp.route("/profile/<username>")
 def profile(username):
     user = User.query.filter_by(username=username).first_or_404()
-    
+
     sorted_posts = sorted(user.posts, key=lambda p: p.timestamp, reverse=True)
-    
+
     return render_template("profile.html", profile_user=user, posts=sorted_posts)
+
 
 @main_bp.route("/like/<int:post_id>", methods=["POST"])
 def like(post_id):
@@ -65,7 +87,7 @@ def comment(post_id):
     if "username" not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
-    comment_text = request.form.get("comment") or request.json.get("comment")
+    comment_text = request.form.get("comment")
 
     if not comment_text:
         flash("Comment can't be empty", "warning")
@@ -78,7 +100,6 @@ def comment(post_id):
     )
     db.session.add(new_comment)
     db.session.commit()
-    # Return the data needed for the frontend to render it instantly
     return jsonify(
         {
             "success": True,
@@ -87,6 +108,29 @@ def comment(post_id):
             "timestamp": datetime.now(timezone.utc),
         }
     )
+
+
+@main_bp.route("/post/", methods=["POST"])
+def post():
+    if "username" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    post_text = request.form.get("content")
+
+    if not post_text:
+        flash("Post can't be empty", "warning")
+        return redirect("/")
+
+    post = Post(content=post_text, username=session["username"])  # type:ignore
+    try:
+        db.session.add(post)
+        db.session.commit()
+        flash("Post sent!", "success")
+        return redirect("/")
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return f"ERROR: {e}"
 
 
 @main_bp.route("/login", methods=["POST", "GET"])
@@ -116,7 +160,7 @@ def signup():
         form_password = request.form["password"]
 
         if not form_username or not form_password:
-            flash("Please fill out all fields","warning")
+            flash("Please fill out all fields", "warning")
 
         hashed_password = bcrypt.generate_password_hash(form_password).decode("utf-8")
 
@@ -125,10 +169,10 @@ def signup():
         try:
             db.session.add(new_user)
             db.session.commit()
-            return redirect("/")
+            return redirect("/login")
 
         except IntegrityError as e:
-            flash("User already exists, please try other username","warning")
+            flash("User already exists, please try other username", "warning")
             return redirect("/signup")
 
     else:

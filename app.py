@@ -1,6 +1,7 @@
 from flask import Flask, render_template
 from datetime import datetime, timezone
 from extensions import db,bcrypt
+
 app = Flask(__name__)
 app.secret_key="23476234672364hjugfahdsvfhdvhshfk87r23563t2grkvfwej"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
@@ -27,7 +28,7 @@ def time_ago(utc_dt):
     return "just now"
   minutes = seconds // 60
   if minutes < 60:
-    return f"{minutes}m ago" if minutes == 1 else f"{minutes}m ago"
+    return f"{minutes}m ago"
   hours = minutes // 60
   if hours < 24:
     return f"{hours}h ago"
