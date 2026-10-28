@@ -1,11 +1,14 @@
 from extensions import db
 from datetime import datetime, timezone
 
-#Association Followers table
+
+
 followers = db.Table('followers',
     db.Column('follower_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
     db.Column('followed_id', db.Integer, db.ForeignKey('user.id'), primary_key=True)
 )
+
+db.Index('idx_followers_followed', followers.c.followed_id)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -27,15 +30,15 @@ class User(db.Model):
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), db.ForeignKey("user.username"), nullable=False)
+    username = db.Column(db.String(20), db.ForeignKey("user.username"), nullable=False, index=True)
     content = db.Column(db.String(200), nullable=False)
     likes = db.Column(db.Integer, default=0)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),index=True)
 
 
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(200), nullable=False)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    username = db.Column(db.String(20), db.ForeignKey("user.username"), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
+    timestamp = db.Column(db.DateTime, default= lambda: datetime.now(timezone.utc))
+    username = db.Column(db.String(20), db.ForeignKey("user.username"), nullable=False, index=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False, index=True)

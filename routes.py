@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, session, jsonify, flash
+from flask import Blueprint, render_template, request, redirect, session, jsonify, flash, g, url_for
 from datetime import datetime, timezone
 from extensions import db, bcrypt
-from models import User, Comment, Post
+from models import User, Comment, Post, followers
 from sqlalchemy.exc import IntegrityError
+
 
 """
 Routes:
@@ -17,17 +18,23 @@ user management ->
 post management ->
     /like/<post_id>
     /comment/<post_id>
+    /follow/<username>
 
 """
 main_bp = Blueprint("main", __name__)
 
-
+@main_bp.before_request
+def load_logged_in_user():
+    if "username" in session:
+        g.current_user = User.query.filter_by(username=session["username"]).first()
+    else:
+        g.current_user = None
+        
 @main_bp.route("/")
 def fyp():
     if "username" in session:
-        current_user = User.query.filter_by(username=session["username"]).first()
 
-        followed_usernames = [u.username for u in current_user.followed.all()] #type:ignore
+        followed_usernames = [u.username for u in g.current_user.followed.all()] #type:ignore
 
         page = request.args.get("page", 1, type=int)
         pagination = (
@@ -42,7 +49,7 @@ def fyp():
         )
     else:
         flash("Please Login To continue", "warning")
-        return redirect("/login")
+        return redirect(url_for("main.login"))
 
 
 @main_bp.route("/global")
@@ -60,16 +67,40 @@ def globalfyp():
     else:
         return render_template("login.html")
 
-#eyyyy
-
 @main_bp.route("/profile/<username>")
 def profile(username):
-    user = User.query.filter_by(username=username).first_or_404()
+    profile_user = User.query.filter_by(username=username).first_or_404()
+    posts = Post.query.filter_by(username=username).order_by(Post.timestamp.desc()).all()
 
-    sorted_posts = sorted(user.posts, key=lambda p: p.timestamp, reverse=True)
+    is_following = False
+    if 'username' in session:
+        is_following = g.current_user.followed.filter(followers.c.followed_id == profile_user.id).count() > 0 #type:ignore
 
-    return render_template("profile.html", profile_user=user, posts=sorted_posts)
+    return render_template("profile.html", profile_user=profile_user, posts=posts, is_following=is_following)
 
+@main_bp.route("/follow/<username>", methods=["POST"])
+def follow_toggle(username):
+    if 'username' not in session:
+        return redirect(url_for('main.login'))
+        
+    current_user = User.query.filter_by(username=session['username']).first()
+    target_user = User.query.filter_by(username=username).first_or_404()
+
+    
+    if current_user.id == target_user.id: # type: ignore
+        return redirect(url_for('main.profile', username=username))
+        
+    is_following = current_user.followed.filter(followers.c.followed_id == target_user.id).count() > 0 # type: ignore
+    
+    if is_following:
+        current_user.followed.remove(target_user) # type: ignore
+    else:
+        current_user.followed.append(target_user) # type: ignore
+        
+    db.session.commit()
+    
+    # Send them right back to the profile page they were looking at
+    return redirect(url_for('main.profile', username=username))
 
 @main_bp.route("/like/<int:post_id>", methods=["POST"])
 def like(post_id):
@@ -149,7 +180,7 @@ def login():
             return redirect("/")
         else:
             flash("Invalid username or password.", "danger")
-            return redirect("/login")
+            return redirect(url_for("main.login"))
     else:
         return render_template("login.html")
 
@@ -170,11 +201,11 @@ def signup():
         try:
             db.session.add(new_user)
             db.session.commit()
-            return redirect("/login")
+            return redirect(url_for("main.login"))
 
         except IntegrityError as e:
             flash("User already exists, please try other username", "warning")
-            return redirect("/signup")
+            return redirect(url_for("main.signup"))
 
     else:
         return render_template("signup.html")
@@ -183,4 +214,4 @@ def signup():
 @main_bp.route("/logout")
 def logout():
     session.pop("username")
-    return redirect("/signup")
+    return redirect(url_for("main.signup"))

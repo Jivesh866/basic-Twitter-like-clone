@@ -21,41 +21,38 @@
         <!-- Feed of Posts -->
         {% if posts | length < 1 %} 
         <div class="card shadow-sm mb-3">
-            <div class="card-body">
-                <h6 class="card-subtitle text-muted mb-2">@username • 2 hours ago</h6>
-                <p class="card-text">This is an example of what a user's tweet looks like on the timeline!</p>
-
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <!-- Like Button Form (Placeholder) -->
-                    <button type="button" class="btn btn-outline-danger btn-sm">❤️ Like (5)</button>
-                </div>
-
-                <hr>
-
-                <!-- Comments Section (Placeholder) -->
-                <div class="comments-section mt-3">
-                    <div class="d-flex justify-content-between">
-                        <p class="small text-muted mb-1"><strong>@commenter</strong></p>
-                        <small class="text-muted">1 hour ago</small>
-                    </div>
-                    <p class="small mb-2">Great post!</p>
-
-                    <form action="/comment" method="POST" class="input-group input-group-sm mt-2">
-                        <input type="text" name="comment" class="form-control" placeholder="Write a comment...">
-                        <button class="btn btn-outline-secondary" type="submit">Reply</button>
-                    </form>
-                </div>
+            <div class="card-body text-center py-4">
+                <p class="text-muted mb-0">No posts to display yet. Follow some users or check out the Global feed!</p>
             </div>
         </div>
         {% else %}
             {% for post in pagination.items %}
             <div class="card shadow-sm mb-3" id="post-{{ post.id }}">
                 <div class="card-body">
-                    <h6 class="card-subtitle text-muted mb-2">@{{ post.username }} • {{ post.timestamp | time_ago }}</h6>
+                    
+                    <!-- Header with Username and Conditional Follow Button -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="card-subtitle text-muted mb-0">
+                            <a href="/profile/{{ post.author.username }}" class="text-decoration-none text-dark fw-bold">@{{ post.author.username }}</a> 
+                            • {{ post.timestamp | time_ago }}
+                        </h6>
+
+                        <!-- Show Follow button only if logged in AND it's not your own post -->
+                        {% if session.get('username') and session.get('username') != post.author.username %}
+                            <form action="/follow/{{ post.author.username }}" method="POST" class="d-inline">
+                                {% if g.current_user and post.author in g.current_user.followed.all() %}
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.8rem;">Unfollow</button>
+                                {% else %}
+                                    <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.8rem;">Follow</button>
+                                {% endif %}
+                            </form>
+                        {% endif %}
+                    </div>
+
                     <p class="card-text">{{ post.content }}</p>
 
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <!-- Dynamic Like Button (Converted to type="button" so it triggers JS instead of standard form submit) -->
+                        <!-- Dynamic Like Button -->
                         <button type="button" class="btn btn-outline-danger btn-sm like-btn" data-post-id="{{ post.id }}">
                             ❤️ Like (<span class="like-count">{{ post.likes }}</span>)
                         </button>
@@ -124,7 +121,6 @@
             });
         });
 
-        
         document.querySelectorAll(".comment-form").forEach(form => {
             form.addEventListener("submit", function (e) {
                 e.preventDefault(); 
@@ -172,6 +168,7 @@
         });
     });
 </script>
+
 <nav aria-label="Page navigation" class="my-4">
     <ul class="pagination justify-content-center">
         <!-- Previous Button -->
