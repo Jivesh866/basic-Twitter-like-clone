@@ -1,4 +1,14 @@
-from flask import Blueprint, render_template, request, redirect, session, jsonify, flash, g, url_for
+from flask import (
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    session,
+    jsonify,
+    flash,
+    g,
+    url_for,
+)
 from datetime import datetime, timezone
 from extensions import db, bcrypt
 from models import User, Comment, Post, followers
@@ -23,18 +33,19 @@ post management ->
 """
 main_bp = Blueprint("main", __name__)
 
+
 @main_bp.before_request
 def load_logged_in_user():
     if "username" in session:
         g.current_user = User.query.filter_by(username=session["username"]).first()
     else:
         g.current_user = None
-        
+
+
 @main_bp.route("/")
 def fyp():
     if "username" in session:
-
-        followed_usernames = [u.username for u in g.current_user.followed.all()] #type:ignore
+        followed_usernames = [u.username for u in g.current_user.followed.all()]  # type:ignore
 
         page = request.args.get("page", 1, type=int)
         pagination = (
@@ -67,51 +78,81 @@ def globalfyp():
     else:
         return render_template("login.html")
 
+
 @main_bp.route("/profile/<username>")
 def profile(username):
     profile_user = User.query.filter_by(username=username).first_or_404()
-    posts = Post.query.filter_by(username=username).order_by(Post.timestamp.desc()).all()
-
+    posts = (
+        Post.query.filter_by(username=username).order_by(Post.timestamp.desc()).all()
+    )
+    comments = Comment.query.order_by(Comment.timestamp).all()
+    
     is_following = False
-    if 'username' in session:
-        is_following = g.current_user.followed.filter(followers.c.followed_id == profile_user.id).count() > 0 #type:ignore
+    
+    if "username" in session:
+        is_following = (
+            g.current_user.followed.filter(
+                followers.c.followed_id == profile_user.id
+            ).count()
+            > 0
+        )  # type:ignore
 
-    return render_template("profile.html", profile_user=profile_user, posts=posts, is_following=is_following)
+    return render_template(
+        "profile.html",
+        profile_user=profile_user,
+        posts=posts,
+        is_following=is_following,
+        comments=comments
+    )
+
 
 @main_bp.route("/follow/<username>", methods=["POST"])
 def follow_toggle(username):
-    if 'username' not in session:
-        return redirect(url_for('main.login'))
-        
-    current_user = User.query.filter_by(username=session['username']).first()
+    if "username" not in session:
+        return redirect(url_for("main.login"))
+
+    current_user = User.query.filter_by(username=session["username"]).first()
     target_user = User.query.filter_by(username=username).first_or_404()
 
-    
-    if current_user.id == target_user.id: # type: ignore
-        return redirect(url_for('main.profile', username=username))
-        
-    is_following = current_user.followed.filter(followers.c.followed_id == target_user.id).count() > 0 # type: ignore
-    
+    if current_user.id == target_user.id:  # type: ignore
+        return redirect(url_for("main.profile", username=username))
+
+    is_following = (
+        current_user.followed.filter(followers.c.followed_id == target_user.id).count() # type: ignore
+        > 0
+    )  
+
     if is_following:
-        current_user.followed.remove(target_user) # type: ignore
+        current_user.followed.remove(target_user)  # type: ignore
     else:
-        current_user.followed.append(target_user) # type: ignore
-        
+        current_user.followed.append(target_user)  # type: ignore
+
     db.session.commit()
-    
+
     # Send them right back to the profile page they were looking at
-    return redirect(url_for('main.profile', username=username))
+    return redirect(url_for("main.profile", username=username))
+
 
 @main_bp.route("/like/<int:post_id>", methods=["POST"])
 def like(post_id):
     if "username" not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
+    current_user = User.query.filter_by(username=session["username"]).first_or_404()
     post = Post.query.get_or_404(post_id)
-    post.likes += 1
+
+    if post in current_user.liked_posts:
+        current_user.liked_posts.remove(post)
+        liked = False
+    else:
+        current_user.liked_posts.append(post)
+        liked = True
+
     db.session.commit()
 
-    return jsonify({"success": True, "new_likes": post.likes})
+    new_like_count = post.liked_by.count()
+
+    return jsonify({"success": True, "liked": liked, "new_likes": new_like_count})
 
 
 @main_bp.route("/comment/<int:post_id>", methods=["POST"])
