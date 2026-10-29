@@ -11,7 +11,8 @@ idna==3.20
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.4
-psycopg2-binary==2.9.13
+psycopg==3.3.6
+psycopg-binary==3.3.6
 python-dotenv==1.2.4
 requests==2.34.2
 SQLAlchemy==2.1.5
