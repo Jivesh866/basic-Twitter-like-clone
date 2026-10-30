@@ -15,6 +15,7 @@ followers = db.Table(
 )
 
 db.Index("idx_followers_followed", followers.c.followed_id)
+db.Index("idx_post_likes_post_id", post_likes.c.post_id)
 
 
 class User(db.Model):
@@ -47,6 +48,9 @@ class Post(db.Model):
     timestamp = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), index=True
     )
+
+
+    __table_args__ = (db.Index("idx_post_username_timestamp", "username", "timestamp"),)
 
 
 class Comment(db.Model):

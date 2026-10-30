@@ -11,7 +11,8 @@ from flask import (
 )
 from datetime import datetime, timezone
 from extensions import db, bcrypt
-from models import User, Comment, Post, followers
+from models import User, Comment, Post, followers, post_likes
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 
@@ -33,6 +34,8 @@ post management ->
 """
 main_bp = Blueprint("main", __name__)
 
+POSTS_PER_PAGE = 10
+
 
 @main_bp.before_request
 def load_logged_in_user():
@@ -42,22 +45,82 @@ def load_logged_in_user():
         g.current_user = None
 
 
+def get_followed_usernames(user):
+    """Usernames `user` follows, in a single query."""
+    if user is None:
+        return set()
+    return set(
+        db.session.scalars(
+            select(User.username)
+            .join(followers, followers.c.followed_id == User.id)
+            .where(followers.c.follower_id == user.id)
+        )
+    )
+
+
+def load_page_extras(posts):
+    """
+    Everything the post cards need (comments, like counts, which posts the
+    current user liked), fetched for ONLY the posts on this page, in 3 queries
+    total instead of several queries per post.
+    """
+    comments_by_post, like_counts, liked_ids = {}, {}, set()
+    post_ids = [p.id for p in posts]
+    if not post_ids:
+        return comments_by_post, like_counts, liked_ids
+
+    comments = (
+        Comment.query.filter(Comment.post_id.in_(post_ids))
+        .order_by(Comment.timestamp)
+        .all()
+    )
+    for c in comments:
+        comments_by_post.setdefault(c.post_id, []).append(c)
+
+    rows = db.session.execute(
+        select(post_likes.c.post_id, func.count())
+        .where(post_likes.c.post_id.in_(post_ids))
+        .group_by(post_likes.c.post_id)
+    ).all()
+    like_counts = {post_id: n for post_id, n in rows}
+
+    if g.current_user:
+        liked_ids = set(
+            db.session.scalars(
+                select(post_likes.c.post_id).where(
+                    post_likes.c.user_id == g.current_user.id,
+                    post_likes.c.post_id.in_(post_ids),
+                )
+            )
+        )
+    return comments_by_post, like_counts, liked_ids
+
+
+def render_feed(pagination, followed_usernames):
+    comments, like_counts, liked_ids = load_page_extras(pagination.items)
+    return render_template(
+        "feed.html",
+        pagination=pagination,
+        posts=pagination.items,
+        comments=comments,
+        like_counts=like_counts,
+        liked_ids=liked_ids,
+        followed_usernames=followed_usernames,
+    )
+
+
 @main_bp.route("/")
 def fyp():
-    if "username" in session:
-        followed_usernames = [u.username for u in g.current_user.followed.all()]  # type:ignore
+    if g.current_user:
+        followed_usernames = get_followed_usernames(g.current_user)
 
         page = request.args.get("page", 1, type=int)
         pagination = (
-            Post.query.filter(Post.username.in_(followed_usernames))
-            .order_by(Post.timestamp.desc())
-            .paginate(page=page, per_page=10, error_out=False)
+            Post.query.filter(Post.username.in_(list(followed_usernames)))
+            .order_by(Post.timestamp.desc(), Post.id.desc())
+            .paginate(page=page, per_page=POSTS_PER_PAGE, error_out=False)
         )
-        posts = pagination.items
-        comments = Comment.query.order_by(Comment.timestamp).all()
-        return render_template(
-            "feed.html", pagination=pagination, posts=posts, comments=comments
-        )
+        return render_feed(pagination, followed_usernames)
     else:
         flash("Please Login To continue", "warning")
         return redirect(url_for("main.login"))
@@ -65,16 +128,12 @@ def fyp():
 
 @main_bp.route("/global")
 def globalfyp():
-    if "username" in session:
+    if g.current_user:
         page = request.args.get("page", 1, type=int)
-        pagination = Post.query.order_by(Post.timestamp.desc()).paginate(
-            page=page, per_page=10, error_out=False
-        )
-        posts = pagination.items
-        comments = Comment.query.order_by(Comment.timestamp).all()
-        return render_template(
-            "feed.html", pagination=pagination, posts=posts, comments=comments
-        )
+        pagination = Post.query.order_by(
+            Post.timestamp.desc(), Post.id.desc()
+        ).paginate(page=page, per_page=POSTS_PER_PAGE, error_out=False)
+        return render_feed(pagination, get_followed_usernames(g.current_user))
     else:
         return render_template("login.html")
 
@@ -82,36 +141,36 @@ def globalfyp():
 @main_bp.route("/profile/<username>")
 def profile(username):
     profile_user = User.query.filter_by(username=username).first_or_404()
-    posts = (
-        Post.query.filter_by(username=username).order_by(Post.timestamp.desc()).all()
+
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        Post.query.filter_by(username=username)
+        .order_by(Post.timestamp.desc(), Post.id.desc())
+        .paginate(page=page, per_page=POSTS_PER_PAGE, error_out=False)
     )
-    comments = Comment.query.order_by(Comment.timestamp).all()
-    
-    is_following = False
-    
-    if "username" in session:
-        is_following = (
-            g.current_user.followed.filter(
-                followers.c.followed_id == profile_user.id
-            ).count()
-            > 0
-        )  # type:ignore
+    comments, like_counts, liked_ids = load_page_extras(pagination.items)
+
+    followed_usernames = get_followed_usernames(g.current_user)
+    is_following = profile_user.username in followed_usernames
 
     return render_template(
         "profile.html",
         profile_user=profile_user,
-        posts=posts,
+        pagination=pagination,
+        posts=pagination.items,
         is_following=is_following,
-        comments=comments
+        comments=comments,
+        like_counts=like_counts,
+        liked_ids=liked_ids,
+        followed_usernames=followed_usernames,
     )
 
 
 @main_bp.route("/follow/<username>", methods=["POST"])
 def follow_toggle(username):
-    if "username" not in session:
+    current_user = g.current_user  
+    if current_user is None:
         return redirect(url_for("main.login"))
-
-    current_user = User.query.filter_by(username=session["username"]).first()
     target_user = User.query.filter_by(username=username).first_or_404()
 
     if current_user.id == target_user.id:  # type: ignore
@@ -129,28 +188,41 @@ def follow_toggle(username):
 
     db.session.commit()
 
-    # Send them right back to the profile page they were looking at
+
     return redirect(url_for("main.profile", username=username))
 
 
 @main_bp.route("/like/<int:post_id>", methods=["POST"])
 def like(post_id):
-    if "username" not in session:
+    if g.current_user is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    current_user = User.query.filter_by(username=session["username"]).first_or_404()
-    post = Post.query.get_or_404(post_id)
+    db.get_or_404(Post, post_id)
+    user_id = g.current_user.id
 
-    if post in current_user.liked_posts:
-        current_user.liked_posts.remove(post)
+
+    already_liked = db.session.execute(
+        select(post_likes).where(
+            post_likes.c.user_id == user_id, post_likes.c.post_id == post_id
+        )
+    ).first()
+
+    if already_liked:
+        db.session.execute(
+            post_likes.delete().where(
+                post_likes.c.user_id == user_id, post_likes.c.post_id == post_id
+            )
+        )
         liked = False
     else:
-        current_user.liked_posts.append(post)
+        db.session.execute(post_likes.insert().values(user_id=user_id, post_id=post_id))
         liked = True
 
     db.session.commit()
 
-    new_like_count = post.liked_by.count()
+    new_like_count = db.session.scalar(
+        select(func.count()).select_from(post_likes).where(post_likes.c.post_id == post_id)
+    )
 
     return jsonify({"success": True, "liked": liked, "new_likes": new_like_count})
 

@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_post_card.html" import post_card %}
+{% from "_pagination.html" import pager %}
 {% block title %}Home Feed{% endblock %}
 
 {% block content %}
@@ -8,7 +10,7 @@
         <!-- Create Post Card -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <form action="/post" method="POST">
+                <form action="/post/" method="POST">
                     <div class="mb-3">
                         <textarea class="form-control" name="content" rows="3"
                             placeholder="What is happening?!"></textarea>
@@ -19,81 +21,15 @@
         </div>
 
         <!-- Feed of Posts -->
-        {% if posts | length < 1 %} 
+        {% if posts | length < 1 %}
         <div class="card shadow-sm mb-3">
             <div class="card-body text-center py-4">
                 <p class="text-muted mb-0">No posts to display yet. Follow some users or check out the Global feed!</p>
             </div>
         </div>
         {% else %}
-            {% for post in pagination.items %}
-            <div class="card shadow-sm mb-3" id="post-{{ post.id }}">
-                <div class="card-body">
-
-                    <!-- Header with Username and Conditional Follow Button -->
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="card-subtitle text-muted mb-0">
-                            <a href="/profile/{{ post.author.username }}" class="text-decoration-none text-dark fw-bold">@{{ post.author.username }}</a>
-                            • {{ post.timestamp | time_ago }}
-                        </h6>
-
-                        <!-- Show Follow button only if logged in AND it's not your own post -->
-                        {% if session.get('username') and session.get('username') != post.author.username %}
-                        <form action="/follow/{{ post.author.username }}" method="POST" class="d-inline">
-                            {% if g.current_user and post.author in g.current_user.followed.all() %}
-                            <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
-                                style="font-size: 0.8rem;">Unfollow</button>
-                            {% else %}
-                            <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                style="font-size: 0.8rem;">Follow</button>
-                            {% endif %}
-                        </form>
-                        {% endif %}
-                    </div>
-
-                    <p class="card-text">{{ post.content }}</p>
-
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <button type="button" class="btn btn-outline-danger btn-sm like-btn" data-post-id="{{ post.id }}">
-                            {% if g.current_user and post in g.current_user.liked_posts %}
-                            ❤️ Liked (<span class="like-count">{{ post.liked_by.count() }}</span>)
-                            {% else %}
-                            🤍 Like (<span class="like-count">{{ post.liked_by.count() }}</span>)
-                            {% endif %}
-                        </button>
-                    </div>
-
-                    <hr>
-
-                    <!-- Comments Section -->
-                    <div class="comments-section mt-3">
-                        <div class="comments-list">
-                            {% set post_comments = comments | selectattr("post_id", "equalto", post.id) | list %}
-                            {% if post_comments | length > 0 %}
-                            {% for c in post_comments %}
-                            <div class="border-bottom pb-2 mb-2">
-                                <div class="d-flex justify-content-between">
-                                    <p class="small text-muted mb-1"><strong>@{{ c.username }}</strong></p>
-                                    <small class="text-muted">{{ c.timestamp | time_ago }}</small>
-                                </div>
-                                <p class="small mb-0">{{ c.content }}</p>
-                            </div>
-                            {% endfor %}
-                            {% else %}
-                            <p class="small text-muted mb-2 no-comments-text">No comments yet. Be the first to reply!</p>
-                            {% endif %}
-                        </div>
-
-                        <!-- Add Comment Form -->
-                        <form class="comment-form input-group input-group-sm mt-3" data-post-id="{{ post.id }}">
-                            <input type="text" name="comment" class="form-control comment-input"
-                                placeholder="Write a comment..." required>
-                            <button class="btn btn-outline-secondary" type="submit">Reply</button>
-                        </form>
-                    </div>
-
-                </div>
-            </div>
+            {% for post in posts %}
+            {{ post_card(post, comments, like_counts, liked_ids, followed_usernames) }}
             {% endfor %}
         {% endif %}
         <!-- End of Post Loop -->
@@ -101,37 +37,7 @@
     </div>
 </div>
 
-<!-- Pagination -->
-<nav aria-label="Page navigation" class="my-4">
-    <ul class="pagination justify-content-center">
-        <!-- Previous Button -->
-        {% if pagination.has_prev %}
-        <li class="page-item">
-            <a class="page-link" href="/?page={{ pagination.prev_num }}">Newer Posts</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled">
-            <span class="page-link">Newer Posts</span>
-        </li>
-        {% endif %}
-
-        <!-- Page Indicator -->
-        <li class="page-item disabled">
-            <span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-        </li>
-
-        <!-- Next Button -->
-        {% if pagination.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="/?page={{ pagination.next_num }}">Older Posts</a>
-        </li>
-        {% else %}
-        <li class="page-item disabled">
-            <span class="page-link">Older Posts</span>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
+{{ pager(pagination) }}
 
 <script src="{{ url_for('static', filename='feed.js') }}"></script>
 {% endblock %}

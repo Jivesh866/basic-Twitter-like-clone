@@ -8,7 +8,21 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key=os.environ.get("SECRET_KEY")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DB_URI")
+db_uri = os.environ.get("DB_URI") or ""
+app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
+
+if db_uri.startswith("postgres"):
+    # Tuned for serverless (Vercel) talking to Supabase's connection pooler.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_size": 1, 
+        "max_overflow": 2,
+        "pool_pre_ping": True, 
+        "pool_recycle": 300,
+        "connect_args": {"prepare_threshold": None},
+    }
+
+
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24
 
 
 db.init_app(app)
